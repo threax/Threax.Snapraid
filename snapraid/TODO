@@ -1,0 +1,368 @@
+SnapRAID TODO
+=============
+
+This is the list of TODO items for SnapRAID.
+
+- Next
+
+- Minor
+
+* Add a new -u, --filter-updated command that filters files
+with a different timestamp, to be able to restore only them to the previous state.
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/e26e787d/
+
+* Allow to filter in diff/list by disk name.
+Not checked disks should be allowed to be missing.
+
+* Add an option to ignore subsecond timestamp.
+Like when you copy data to a filesystem with less timestamp precision.
+
+* Use threads to scan all the disks at the same time.
+- After 7.0 Windows changes it seems fast enough even
+with a mono thread implementation with 100.0000 files.
++ But if you have millions of files, it could take minutes.
+
+* Support more parity levels
+It can be done with a generic computation function, using
+intrinsic for SSSE3 and AVX instructions.
+It would be interesting to compare performance with the hand-written
+assembler functions. Eventually we can convert them to use intrinsic also.
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/9dbd7581/
+
+* Extend haspdeep to support the SnapRAID hash :
+https://github.com/jessek/hashdeep/
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/90b0e9b2/?limit=25
+
+* Add a "noaccessdenied" config option to exclude not readable files/dirs.
+Like the "nohidden".
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/1409c26a/
+
+* Don't insert new files if they are new opened by other applications.
+Not yet sure how to check if a file is open in a fast way.
+In case we can exclude files created too recently, like with a --min-age option.
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/a1683dd9/?limit=25#1e16
+
+* Add markdown support for output
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/661cce8b/
+
+* Add ZFS support for SMART and UUID.
+See latest messages at: https://sourceforge.net/p/snapraid/discussion/1677233/thread/42defa3b/
+
+* Change all the path printed in the terminal as relative and not absolute.
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/648955ec/ (Leifi in diff)
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/5b6ef1b9/ (Miles in check + filter)
+Partially done. Now you can control it with --test-fmt
+
+* Add ReFS support with 128 bits inode
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/2be14f63/
+https://github.com/Microsoft/Windows-driver-samples/blob/master/filesys/miniFilter/avscan/filter/utility.h
+https://github.com/Microsoft/Windows-driver-samples/blob/master/filesys/miniFilter/avscan/filter/utility.c
+https://github.com/Microsoft/Windows-driver-samples/blob/master/filesys/miniFilter/delete/delete.c
+Partially done. Until the inodes are less than 64 bit, everything works.
+If a 128 bit inode is found, it aborts with "Invalid inode number! Is this ReFS?"
+
+* When a disk is replaced, and SnapRAID detect this by a UUID change, we could clear the
+scrub information for that disk.
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/ee87901b/
+
+* In fix, automatic --import excluded directory in the config file.
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/c80c42e5/?limit=25
+
+* Allow to have "partial" parity disks, smaller than required ?
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/e924c663/
+
+* How to handle corrupt copied/moved files ? At now pre-hash checks them,
+but if a corruption is found, it stops the sync process.
+This is not optimal, because the 'sync' command is stopped instead to continue.
+A possible solution could be:
+If a copied block is corrupt, we can recover the original one from parity (if moved),
+or read it directly from disk (if copied), and we can use this one to build the parity,
+working around the corruption, that can be later fixed with "fix".
+This requires to allocate blocks of moved files in parity positions *after* the
+currently used one.
+
+* Some programs are misusing the FILE_ATTRIBUTE_TEMPORARY.
+In fact, it makes sense as it's a good way to control the cache on the file,
+so, despite the name, that usage could be common for not temporary files.
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/57d40108/
+
+* Restore ownership and permissions, at least in Unix.
+
+* Restore directory timestamps.
+
+* Add an option for dup to list only duplicates with different name.
+This supposing that if a file has the same name, it's intentionally duplicated.
+
+* In fix an existing symlink with the same name of a file to be recovered may stop
+the process making the create() operation to fail.
+The same for directories, when recreating the directory tree.
+
+* If a directory exists with the same name of a parity/content file be more explicative
+on the error message. See: https://sourceforge.net/projects/snapraid/forums/forum/1677233/topic/4861034
+
+* We don't try to do partial block recovering. A block is correct or not.
+But if only some bytes, or a sector, is wrong, it should be possible to recover all the
+rest of the block.
+The problem is that we don't have any hash to ensure that the block is partially recovered,
+or completely garbage. But it makes sense to anyway write the "most likely" correct one.
+
+- Naming
+
+* A new 'init' command to differentiate the first 'sync' operation.
+This 'init' will work also without a content file, and parity files.
+Instead 'sync' will require all of them.
+This will also help when running with the parity filesystem unmounted.
+
+* Rename sync->backup and fix->restore. It seems to me a naming expressing
+better the meaning of the commands. But not yet sure.
+
+- Pooling
+
+* Add a new "commit" command to move changes from the pool to the array.
+It should:
+- Move files copied into the pool (that are no links) to the array.
+The files should be moved to the disk that contains most of the files
+in the directory. If no space, try with the disk with less files
+in the directory, and eventually the disk in the array with more free space.
+- Detect renames, and apply them in the array.
+The file will be renamed and moved to the new directory, if changed,
+but kept in the same disk of the array.
+- Detect deletes, and move file in the array to a "/trash/" directory
+of the same disk. For safety no real deletion is done.
+File with the same name will get an extra extension like ".1", ".2".
+
+- Major
+
+* Uses a separated file for storing hashes, to allow to use a memory
+mapped file to decrease memory utilization.
+The file can contains hashes stored in the same order they are accessed
+in sync/check/scrub.
++ A lot less memory utilization
+- It will be slow in --pre-hash as the files are accessed in another order,
+but no much slow.
+- How to handle multiple .content file copy ? When working we can have
+only a single file. When storing the .content we'll have to copy it
+in all the places.
+* Can we mix the existing and new approach ? We can create this
+hash file at startup in a memory mapped "temporary" file.
+It may takes some time to create it, but then it will be fast.
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/cdea773f/
+
+* Allocate parity minimizing concurrent use of it
+Each parity allocation should check for a parity
+range with less utilization by other disks.
+We need to take care do disable this mechanism when the parity space
+is near to fillup the parity partition.
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/1797bf7d/
++ This increase the possibility of recovering with multiple failures with not
+enough parity, as the benefit of existing parity is maximized.
+- Possible increase of fragmentation of parity allocation
+- No real benefit when the array is filled
+
+
+Rejected TODO
+=============
+
+This is a list of rejected TODO items.
+
+* Allow multiple parity files and to coexist with data
+in the same disk.
+This is possible if the data in the same disk uses parity addresses not
+contained in the parity file present in the same disk.
++ It's a nice trick. The disk containing parity, will have less space available,
+and then it will need less parity, resolving the problem of the parity disk being too small.
++ We can also think at an automated parity files naming and creation, removing
+the need of the user to specify that. We can also completely remove the
+concept of parity drive, automatically allocating parity in the most free data drives.
+- It won't be not nice to have the program to automatically
+choose where to create the parity, because the choice cannot be optimal.
+With a dedicated disk manually chosen, it's instead optimal.
++ We can limit this coexist possibility only to latest parity file,
+allowing the user to choose where to put it.
+- It won't work with disks of different size.
+Suppose to have all disks of size N, with only one of size M>N.
+To fully use the M space, you can allocate a full N parity in such disk,
+but the remaining space will also need additional parity in the other disks,
+in fact requiring a total of M parity for the array.
+In the end, we cannot avoid that the first biggest disk added is fully
+dedicated to parity, even if it means to leave some space unused.
+
+* Directly access disks for parity skipping the filesystem layer
+- No real performance or space gain compared to a custom filesystem configuration like:
+mkfs.ext3 -i 16777216 -m0 -O ^dir_index,large_file,sparse_super /dev/sdX1
+See: https://sourceforge.net/p/snapraid/discussion/1677233/thread/9c0ef324/?limit=25
+
+* Allow to specify more than one disk directories to cover the case of multi partitions.
+Different partitions have duplicate inode. The only way to support this is to
+add also a kind of device_id, increasing the memory required.
+But it should be only few bits for each file. So, it should be manageable.
+A lot of discussions about this feature :)
+https://sourceforge.net/p/snapraid/discussion/1677233/thread/b2cd9385/
+- The only benefit is to distribute better the data. This could help the recovery process,
+in case of multiple failures. But no real usability or functionality benefit in the normal
+case.
+
+* https://sourceforge.net/p/snapraid/discussion/1677233/thread/2cb97e8a/
+Have two hashes for each file. One for the first segment, that may use only a part of the first parity block.
+And a second hash that takes care of the final segment, also using only part of a parity block.
+Intermediate blocks can be handled like now.
+The first and last segment can use only a part of the parity block, sharing it with other files,
+and then allowing big parity blocks.
++ Big parity block, like 1MB, and small file allocation, like 4KB.
+- It won't be possible to copy hash info from one disk to another, as copied files
+may have a different block splitting. Copied file should be allocated with the same exact
+splitting.
+- Dup detection can be handled with a dedicated hash covering the full file. But increasing
+the number of hash for each file to three.
+- No way to handle block import.
+
+* Create a filesystem snapshot at every sync, and use it in all the other commands
+automatically.
+At the next sync, drop the old snapshot and create a new one.
+This should help recovering, because we'll have the exact copy used by sync.
+This feature can be enabled with a specific option, and available
+in Windows using Shadow Copy, and in Linux using Btrfs, and in a generic
+Unix using ZFS.
+See Jens's Windows script at: http://sourceforge.net/p/snapraid/discussion/1677233/thread/a1707211/
+Note that a different between Windows and Unix is that in Windows old snapshots
+are automatically deleted.
+
+* Checks if splitting hash/parity computation in 4K pages
+can improve speed in sync. That should increase cache locality,
+because we read the data two times for hash and parity,
+and if we manage to keep it in the cache, we should save time.
+- We now hash first the faster disks, and this could
+reduce performance as we'll have to wait for all disks.
+
+* Enable storing of creation time NTFS, crtime/birth time EXT4.
+But see: http://unix.stackexchange.com/questions/50177/birth-is-empty-on-ext4
+coreutils stat has an example, but it doesn't work in Linux (see lib/stat-time.h)
+- Not supported in Linux.
+
+* In the content file save the timestamp of the parity files.
+If they do not match, stop the processing.
+This can be done to avoid to use not synchronized parity and content files,
+resulting in wrong data.
+But if the sync process is killed we need a way to resyncronize them.
+Or maybe we should allow parity newer than content, but not viceversa.
+- The corner cases are too many. A fixed parity may be never.
+A someway modified content may be never. So, the time is not really significant.
+
+* Use Async IO for Linux (libaio).
+See thread: https://sourceforge.net/p/snapraid/discussion/1677233/thread/a300a10b/
+Docs at: http://www.fsl.cs.sunysb.edu/~vass/linux-aio.txt
+- Implemented for scrub in the "libaio" branch, but it's slower of
+about 20% in my machine.
+
+* Allow to put parity directly into the underline block device without the need
+of any filesystem.
+That would allow to increase a lot the free space for parity.
+We can implement some kind of filesystem detection to avoid to overwrite an already
+existing filesystem.
+- Still risky if stuffs go wrong.
+- In Linux with largefile4 there is only a very small amount of space wasted.
+In the order of 0.01%. Not really worth to do it.
+- With NTFS the saving is also limited, because the "reserved" MFT of 12.5% is
+not really exclusively reserved, but can be used also for normal files,
+when all the remaining space is filled.
+
+* The data could be compressed before processing, resulting in parity block of
+fixed size, but matching different data block sizes.
+The complexity is that a file blocks will have to be allocated at runtime,
+and you may run out of them in the middle of the processing.
+We need also a way to compress a stream until the compressed data reach the
+block size, but no more, and then start a new block.
+For each block, we'll have also to store. "size_uncompressed", "size_compressed",
+"hash".
+- It will be too slow.
+- Not addressing the problem of a lot of small files, as still one block will be
+allocated for each file.
+
+* Uses different block size for parity and file allocation.
+We can use a big size, like 1MB for parity allocation and hash computation,
+and at the same time using a 4K blocks for files allocation.
+This means that a parity blocks may contain more than one file.
+- We'll have to drop the dup and import feature,
+because it won't be possible anymore to compare the hash of files,
+as it would depend also on the start address inside the parity block.
+- When a hash fail, it won't be possible to tell which file is really
+broken, because more file may share the same parity block.
+
+* Have special parity blocks containing the last blocks of more files
+until it's filled up.
+For such parity blocks, we'll have more than one hash. One for each
+file contained.
+- Parity will be too fragmented, because we'll have parity blocks
+containing the last blocks of many files.
+
+* In "pool" for Windows, and for unique directories a junction to the
+directory could be used, avoiding to use symlinks to files.
+This allows to overcome the problem of sharing symlinks.
+- It would work, in fact it would work to well. The problem is that
+Windows will treat the junction as the real directory, like *really*
+deleting its content from Explorer pressing "del" and also from the
+command line with "rd". Too dangerous.
+
+* When fixing, before overwriting the present file, make a copy of it just in
+case that the original file cannot be completely recovered.
+We can always open files in read-only mode, if a write is required, we close it,
+rename it to with a .bak extension, and rewrite it up to the required size.
+The same for symlink if a file with the same name exist or viceversa.
+- The idea behind this is to avoid to leave untouched a file if we cannot
+restore it completely. But it's debatable what's better in this case.
+Anyway, considering the typical use, it's not really relevant.
+
+* In the import list, uses also all the blocks in the array.
+But we must cover the case of bad blocks. Likely we can just check the
+hash after reading, and in case, skip it, and retry with another copy.
+- It will work only for duplicate files. Not really worth do to it.
+
+* Save the content file in compressed .gz format to save space.
+- Compression is too slow. Even using the very fast lzo.
+$ time lzop  -1 < content > content.lzo
+real    1m23.014s
+user    0m40.822s
+sys     0m3.389s
+
+$ time ./gzip -1 < content > content.gz
+real    1m47.463s
+user    1m23.732s
+sys     0m3.290s
+
+$ time ./gzip --huffonly < content > contentH.gz
+real    1m51.607s
+user    1m30.032s
+sys     0m3.245s
+
+Similar command done with snapraid without compression, and involving also decoding
+and encoding takes less time.
+
+$ time ./snapraid --test-skip-device --test-skip-self -v -c ./test.conf test-rewrite
+real    0m59.087s
+user    0m14.164s
+sys     0m4.398s
+
+* Recognizes that a file is moved from one disk to another, and if the parity
+data doesn't overlap, do not recompute it.
+- It's going to work only in RAID5 mode and only in special cases.
+
+* Implements a multithread sync command to share HASH and RAID computations
+to different CPUs.
+- At now it's questionable if it will result in a performance improvement.
+The murmur3 hash, and the RAID5/6 computations are so fast that even a single
+thread should be able to do them.
+Use the "snapraid -T" comment to see the speed.
+
+* In the repair() function the heuristic to detect if we recovered after the sync,
+can be extended to all the previous blocks, because we always proceed in block
+order during a sync.
+So, if for a block we can detect that we recovered using updated parity data,
+also for all the previous blocks this is true.
+Anyway, the case where this information could be useful should be present
+only if changes are committed after an aborted sync.
+- No real advantage on that, beside some speed gain in fix.
+The risk would be instead to miss some recovery opportunity.
+So, makes sense to have it a little slower but trying any
+possible recovery strategy.
+
+
