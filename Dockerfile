@@ -5,6 +5,7 @@ RUN apt-get install build-essential -y
 
 COPY snapraid/. /src/snapraid/.
 WORKDIR /src/snapraid
+RUN chmod 777 ./configure
 RUN ./configure
 RUN make
 RUN make check
