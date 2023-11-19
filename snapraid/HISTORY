@@ -1,6 +1,20 @@
 SnapRAID HISTORY
 ================
 
+12.2 2022/08
+============
+ * Fix build issue with GLIBC 2.36
+
+12.1 2022/01
+============
+ * Reduce stack usage to work in environments with limited stack size, like MUSL.
+ * Increase the default disk cache from 8 MiB to 16 MiB.
+
+12.0 2021/12
+============
+ * Parallel disk scanning. It's always enabled but it doesn't cover the -m option
+   that still process disks sequentially.
+
 11.6 2021/10
 ============
  * The 'fix' and 'check' command with the -e option now process the whole

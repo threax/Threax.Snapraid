@@ -1,1 +1,1 @@
-wsl sudo docker build . -t snapraid
+docker build . -t snapraid

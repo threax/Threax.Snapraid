@@ -31,14 +31,26 @@ int exit_sync_needed = 2;
 /* Add missing Windows declaration */
 
 /* For SetThreadExecutionState */
+#ifndef WIN32_ES_SYSTEM_REQUIRED
 #define WIN32_ES_SYSTEM_REQUIRED      0x00000001L
+#endif
+#ifndef WIN32_ES_DISPLAY_REQUIRED
 #define WIN32_ES_DISPLAY_REQUIRED     0x00000002L
+#endif
+#ifndef WIN32_ES_USER_PRESENT
 #define WIN32_ES_USER_PRESENT         0x00000004L
+#endif
+#ifndef WIN32_ES_AWAYMODE_REQUIRED
 #define WIN32_ES_AWAYMODE_REQUIRED    0x00000040L
+#endif
+#ifndef WIN32_ES_CONTINUOUS
 #define WIN32_ES_CONTINUOUS           0x80000000L
+#endif
 
 /* File Index */
+#ifndef FILE_INVALID_FILE_ID
 #define FILE_INVALID_FILE_ID          ((ULONGLONG)-1LL)
+#endif
 
 /**
  * Direct access to RtlGenRandom().
@@ -475,7 +487,7 @@ static void windows_attr2stat(DWORD FileAttributes, DWORD ReparseTag, struct win
  */
 static int windows_info2stat(const BY_HANDLE_FILE_INFORMATION* info, const FILE_ATTRIBUTE_TAG_INFO* tag, struct windows_stat* st)
 {
-	uint64_t mtime;
+	int64_t mtime;
 
 	windows_attr2stat(info->dwFileAttributes, tag->ReparseTag, st);
 
@@ -518,7 +530,7 @@ static int windows_info2stat(const BY_HANDLE_FILE_INFORMATION* info, const FILE_
 	 * "that includes 128-bit file identifiers.  If GetFileInformationByHandle returns"
 	 * "FILE_INVALID_FILE_ID, the identifier may only be described in 128 bit form."
 	 */
-	if (st->st_ino == FILE_INVALID_FILE_ID) {
+	if (st->st_ino == (uint64_t)FILE_INVALID_FILE_ID) {
 		log_fatal("Invalid inode number! Is this ReFS?\n");
 		errno = EINVAL;
 		return -1;
@@ -532,7 +544,7 @@ static int windows_info2stat(const BY_HANDLE_FILE_INFORMATION* info, const FILE_
  */
 static int windows_stream2stat(const BY_HANDLE_FILE_INFORMATION* info, const FILE_ID_BOTH_DIR_INFO* stream, struct windows_stat* st)
 {
-	uint64_t mtime;
+	int64_t mtime;
 
 	/* The FILE_ID_BOTH_DIR_INFO doesn't have the ReparseTag information */
 	/* we could use instead FILE_ID_EXTD_DIR_INFO, but it's available only */
@@ -563,7 +575,7 @@ static int windows_stream2stat(const BY_HANDLE_FILE_INFORMATION* info, const FIL
 	st->st_sync = 0;
 
 	/* in ReFS the IDs are 128 bit, and the 64 bit interface may fail */
-	if (st->st_ino == FILE_INVALID_FILE_ID) {
+	if (st->st_ino == (uint64_t)FILE_INVALID_FILE_ID) {
 		log_fatal("Invalid inode number! Is this ReFS?\n");
 		errno = EINVAL;
 		return -1;
@@ -577,7 +589,7 @@ static int windows_stream2stat(const BY_HANDLE_FILE_INFORMATION* info, const FIL
  */
 static void windows_finddata2stat(const WIN32_FIND_DATAW* info, struct windows_stat* st)
 {
-	uint64_t mtime;
+	int64_t mtime;
 
 	windows_attr2stat(info->dwFileAttributes, info->dwReserved0, st);
 
@@ -789,7 +801,7 @@ static BOOL GetFilePhysicalOffset(HANDLE h, uint64_t* physical)
 	BOOL ret;
 	DWORD n;
 
-	/* in Wine FSCTL_GET_RETRIVIAL_POINTERS is not supported */
+	/* in Wine FSCTL_GET_RETRIEVAL_POINTERS is not supported */
 	if (is_wine) {
 		*physical = FILEPHY_UNREPORTED_OFFSET;
 		return TRUE;
@@ -1039,7 +1051,7 @@ int windows_futimens(int fd, struct windows_timespec tv[2])
 {
 	HANDLE h;
 	FILETIME ft;
-	uint64_t mtime;
+	int64_t mtime;
 
 	if (fd == -1) {
 		errno = EBADF;
@@ -1061,7 +1073,7 @@ int windows_futimens(int fd, struct windows_timespec tv[2])
 	mtime = tv[0].tv_sec;
 	mtime *= 10000000;
 	mtime += tv[0].tv_nsec / 100;
-	mtime += 116444736000000000;
+	mtime += 116444736000000000LL;
 
 	ft.dwHighDateTime = mtime >> 32;
 	ft.dwLowDateTime = mtime;
@@ -1079,7 +1091,7 @@ int windows_utimensat(int fd, const char* file, struct windows_timespec tv[2], i
 	wchar_t conv_buf[CONV_MAX];
 	HANDLE h;
 	FILETIME ft;
-	uint64_t mtime;
+	int64_t mtime;
 	DWORD wflags;
 
 	/*
@@ -1119,7 +1131,7 @@ int windows_utimensat(int fd, const char* file, struct windows_timespec tv[2], i
 	mtime = tv[0].tv_sec;
 	mtime *= 10000000;
 	mtime += tv[0].tv_nsec / 100;
-	mtime += 116444736000000000;
+	mtime += 116444736000000000LL;
 
 	ft.dwHighDateTime = mtime >> 32;
 	ft.dwLowDateTime = mtime;
@@ -1556,7 +1568,7 @@ int windows_link(const char* existing, const char* file)
 }
 
 /**
- * In Windows 10 allow creation of symblink by not privileged user.
+ * In Windows 10 allow creation of symlink by not privileged user.
  *
  * See: Symlinks in Windows 10!
  * https://blogs.windows.com/buildingapps/2016/12/02/symlinks-windows-10/#cQG7cx48oGH86lkI.97

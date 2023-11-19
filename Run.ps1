@@ -7,7 +7,7 @@ mkdir "$scriptPath/test/oscontent"
 
 $wslScriptPath = wsl wslpath -u "`"$scriptPath`""
 
-wsl sudo docker run `
+docker run `
 -v $wslScriptPath/test/snapraid.conf:/etc/snapraid.conf `
 -v $wslScriptPath/test/oscontent:/mnt/oscontent `
 -v $wslScriptPath/test/diskp:/mnt/diskp `
